@@ -50,6 +50,7 @@ class SlurmPipelineExecutor(PipelineExecutor):
         stagger_max_array_jobs: int = 0,
         run_on_dependency_fail: bool = False,
         randomize_start: bool = False,
+        queue_array_subjobs: bool = True,
     ):
         """Execute a pipeline on a slurm cluster
 
@@ -119,6 +120,7 @@ class SlurmPipelineExecutor(PipelineExecutor):
             if slurm_logs_folder
             else f"slurm_logs/{self.job_name}/{get_timestamp()}_{get_random_str()}"
         )
+        self.queue_array_subjobs = queue_array_subjobs
 
     def run(self):
         if "SLURM_ARRAY_TASK_ID" in os.environ:
@@ -213,8 +215,11 @@ class SlurmPipelineExecutor(PipelineExecutor):
                 args.append(f"--dependency={self.dependency}")
             self.job_id = launch_slurm_job(launch_file_contents, *args)
             launched_jobs += 1
+            if not self.queue_array_subjobs:
+                break
         logger.info(f"Slurm job launched successfully with (last) id={self.job_id}.")
-        self.launch_merge_stats()
+        if self.queue_array_subjobs or len(ranks_to_run) <= max_array:
+            self.launch_merge_stats()
         self.logging_dir.close()
 
     def get_sbatch_args(self, max_array: int = 1) -> dict:
